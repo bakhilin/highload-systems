@@ -1,0 +1,151 @@
+@startuml
+skinparam linetype ortho
+skinparam packageStyle rectangle
+hide circle
+
+title Orbital Logistics - Все типы связей между сущностями
+
+' === ОСНОВНЫЕ СУЩНОСТИ ===
+
+entity Spacecraft {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * name : VARCHAR(100) <<UK>>
+  * status : ENUM('DOCKED', 'IN_TRANSIT', 'MAINTENANCE', 'DECOMMISSIONED')
+  * mass_capacity : DECIMAL(12,2)
+}
+
+entity Cargo {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * name : VARCHAR(200)
+  * cargo_type : ENUM('FOOD', 'EQUIPMENT', 'SCIENTIFIC', 'CONSTRUCTION_MATERIALS')
+  * mass_per_unit : DECIMAL(10,2)
+}
+
+entity StorageUnit {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * unit_code : VARCHAR(50) <<UK>>
+  * total_mass_capacity : DECIMAL(12,2)
+}
+
+entity CrewMember {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * name : VARCHAR(100)
+  * role : VARCHAR(50)
+  * specialization : VARCHAR(100)
+}
+
+entity Mission {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * mission_code : VARCHAR(50) <<UK>>
+  * description : TEXT
+  * priority : ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')
+}
+
+' === СВЯЗУЮЩИЕ СУЩНОСТИ ДЛЯ M2M ===
+
+entity CargoManifest {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * spacecraft_id : BIGINT <<FK>>
+  * cargo_id : BIGINT <<FK>>
+  * quantity : INTEGER
+  * loaded_at : DATETIME
+  * manifest_status : VARCHAR(20)
+  --
+  note right: Many-to-Many\nс дополнительными полями
+}
+
+entity MissionAssignment {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * mission_id : BIGINT <<FK>>
+  * crew_member_id : BIGINT <<FK>>
+  * assigned_at : DATETIME
+  * assignment_role : VARCHAR(50)
+  --
+  note right: Many-to-Many\nс дополнительными полями
+}
+
+entity CargoStorage {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * storage_unit_id : BIGINT <<FK>>
+  * cargo_id : BIGINT <<FK>>
+  * quantity : INTEGER
+  * stored_at : DATETIME
+  --
+  note right: Many-to-Many\nс дополнительными полями
+}
+
+' === ОПРЕДЕЛЕНИЕ СВЯЗЕЙ С ЯВНЫМ ВЫДЕЛЕНИЕМ ТИПОВ ===
+
+' === 1. One-to-Many / Many-to-One ===
+note top of Spacecraft
+  **One-to-Many / Many-to-One**
+  Один корабль → Много записей в манифесте
+  Много записей → Один корабль
+end note
+
+Spacecraft ||--o{ CargoManifest : "имеет\nманифесты"
+CargoManifest }o--|| Spacecraft : "принадлежит\nкораблю"
+
+Cargo ||--o{ CargoManifest : "входит в\nманифесты" 
+CargoManifest }o--|| Cargo : "содержит\nгруз"
+
+' === 2. Many-to-Many через связующую сущность ===
+note top of MissionAssignment
+  **Many-to-Many через связующую сущность**
+  Много миссий → Много членов экипажа
+  с дополнительными полями назначения
+end note
+
+Mission ||--o{ MissionAssignment : "имеет\nназначения"
+MissionAssignment }o--|| Mission : "для\nмиссии"
+
+CrewMember ||--o{ MissionAssignment : "получает\nназначения" 
+MissionAssignment }o--|| CrewMember : "назначен\nчлену экипажа"
+
+' === 3. Many-to-Many с дополнительными полями ===
+note top of CargoStorage
+  **Many-to-Many с дополнительными полями**
+  Много складов → Много грузов
+  с информацией о хранении
+end note
+
+StorageUnit ||--o{ CargoStorage : "хранит\nгрузы"
+CargoStorage }o--|| StorageUnit : "на\nскладе"
+
+Cargo ||--o{ CargoStorage : "распределен\nпо складам"
+CargoStorage }o--|| Cargo : "хранимый\nгруз"
+
+' === 4. Простое Many-to-Many (без дополнительных полей) ===
+entity SpacecraftMission {
+  * spacecraft_id : BIGINT <<FK>> <<PK>>
+  * mission_id : BIGINT <<FK>> <<PK>>
+  --
+  note right: **Простое Many-to-Many**\nСоставной первичный ключ\nБез дополнительных полей
+}
+
+Spacecraft }o--o{ Mission : "назначенные\nмиссии"
+SpacecraftMission ||..|| Spacecraft : "через"
+SpacecraftMission ||..|| Mission : "через"
+
+' === 5. One-to-One ===
+entity DockingRecord {
+  * id : BIGINT <<PK>> <<AI>>
+  --
+  * spacecraft_id : BIGINT <<FK>> <<UK>>
+  * docking_port : VARCHAR(50)
+  * docked_at : DATETIME
+  --
+  note right: **One-to-One**\nОдин корабль → Одна активная стыковка
+}
+
+Spacecraft ||--|| DockingRecord : "текущая\nстыковка"
+DockingRecord }|--|| Spacecraft : "для\nкорабля"
+@enduml
